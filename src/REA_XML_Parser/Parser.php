@@ -37,14 +37,20 @@
  *
  */
 
-class REA_XML {
+namespace REA_XML_Parser;
+
+class Parser {
 
 	/* Default Fields we return. You can specify any
 	 * fields int the REA XML standard
 	 */
 	private $fields = array (
+		'uniqueID',
+		'agentID',
 		'priceView',
 		'description',
+		'headline',
+		'energyRating',
 		'features' => array(
 			'bedrooms',
 			'bathrooms',
@@ -54,6 +60,11 @@ class REA_XML {
 			'pool',
 			'alarmSystem',
 			'otherFeatures',
+			'livingArea',
+			'alarmSystem',
+			'dishwasher',
+			'gym',
+			'broadband'
 		),
 		'address' => array(
 			'streetNumber',
@@ -61,7 +72,16 @@ class REA_XML {
 			'suburb',
 			'state',
 			'postcode',
-		),	
+			'country'
+		),
+		'buildingDetails' => array(
+			'area'
+		),
+		'listingAgent' => array(
+			'name',
+			'telephone',
+			'email'
+		),
 		'images',
 		'status',
 	);
@@ -71,8 +91,11 @@ class REA_XML {
 
 	/* Keeps track of excluded files */
 	private $excluded_files;
+	
+	/* debug status */
+	protected $debug;
 
-	function REA_XML($debug=false, $fields=array()) {
+	function __construct($debug=false, $fields=array()) {
 
 		/* Use requested fields if set */
 		if(!empty($fields)) {
@@ -99,17 +122,17 @@ class REA_XML {
 
             /* Some of the xml files I received were invalid. This could be due to a number
              * of reasons. SimpleXMLElement still spits out some ugly errors even with the try
-             * catch so we supress them when not in debug mode
+             * catch so we suppress them when not in debug mode
              */
             if($this->debug) {
-                $xml = new SimpleXMLElement($xml_string);
+                $xml = new \SimpleXMLElement($xml_string);
             }
             else {
-                @$xml = new SimpleXMLElement($xml_string);
+                @$xml = new \SimpleXMLElement($xml_string);
             }
 
         }
-        catch(Exception $e) {
+        catch(\Exception $e) {
             $this->feedback($e->getMessage());
         }
 
@@ -126,6 +149,8 @@ class REA_XML {
                 $property_type = $property->getName();
 
                 $prop = array();//reset property
+                $prop['images'] = array();
+                $prop['floorplans'] = array();
 
                 /* For every property we select all
                  * the requested fields
@@ -165,8 +190,9 @@ class REA_XML {
                             if(!is_null($property->$field->floorplan)) {
                                 foreach($property->$field->floorplan as $floorplan) {
                                     $attr = $floorplan->attributes();
-                                    if($attr) {;
-                                        $prop['floorplan_'.(string)$attr->id] = (string)$attr->url;
+                                    if($attr) {
+                                    	$location = $attr->url ?: $attr->file;
+                                        $prop['floorplans']['floorplan_'.(string)$attr->id] = (string) $location;
                                     }
                                 }
                             }
@@ -174,7 +200,8 @@ class REA_XML {
                                 foreach($property->$field->img as $img) {
                                     $attr = $img->attributes();
                                     if($attr) {
-                                        $prop['img_' . (string)$attr->id] = (string)$attr->url;
+                                    	$location = $attr->url ?: $attr->file;
+                                        $prop['images']['img_' . (string)$attr->id] = (string) $location;
                                     }
                                 }
                             }
@@ -224,7 +251,7 @@ class REA_XML {
 				/* Loop through all the files. */
 				while(false !== ($xml_file = readdir($handle))) {
 
-					/* Ensure it's not exlcuded. */
+					/* Ensure it's not excluded. */
 					if(!in_array($xml_file, $this->excluded_files)) {
 						
 						/* Get the full path */
@@ -266,7 +293,7 @@ class REA_XML {
 			}	
 		}
 		else {
-			throw new Exception("Directory could not be found");
+			throw new \Exception("Directory could not be found");
 		}
 
 		return $properties;
@@ -283,7 +310,7 @@ class REA_XML {
 			/* Parse the XML file */
 			$properties = $this->parse_xml(file_get_contents($xml_full_path));
 
-			if(is_array($properties) && count($properties > 0)) {
+			if(is_array($properties) && (count($properties) > 0)) {
 				/* If a processed/removed directory was supplied then we move
 				* the xml files accordingly after they've been processed
 				*/
@@ -310,7 +337,7 @@ class REA_XML {
 			}
 		}
 		else {
-			throw new Exception("File could not be found");
+			throw new \Exception("File could not be found");
 		}
 
 		return $properties;
